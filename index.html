@@ -73,7 +73,7 @@
     }
     .landing-card button:hover { filter: brightness(1.1); }
     .landing-card button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .landing-card .error { color: #f85149; font-size: 0.85rem; margin-top: 8px; }
+    .landing-card .error { color: #f85149; font-size: 0.85rem; margin-top: 8px; min-height: 1.5em; }
     .landing-card .file-attached { color: var(--accent); font-size: 0.85rem; margin-top: 6px; }
     #map-view { position: absolute; inset: 0; display: none; flex-direction: column; z-index: 1; }
     #map-view.visible { display: flex; }
@@ -235,9 +235,7 @@
     <div id="globe-tooltip" aria-live="polite"></div>
   </div>
 
-  <script src="js/parser.js"></script>
-  <script src="js/world-land.js"></script>
-  <script src="js/globe2d.js"></script>
+  <!-- Run this first so the Generate button always gets a click handler -->
   <script>
     (function () {
       var errEl = document.getElementById('landing-error');
@@ -257,6 +255,10 @@
       var landingError = document.getElementById('landing-error');
       var landing = document.getElementById('landing');
       var mapView = document.getElementById('map-view');
+      if (!generateBtn || !landingError || !landing || !mapView) {
+        showErr('Page error: missing elements. Check the page loaded correctly.');
+        return;
+      }
       var mapTitle = document.getElementById('map-title');
       var totalCount = document.getElementById('total-count');
       var locationCount = document.getElementById('location-count');
@@ -313,7 +315,8 @@
       }
 
       generateBtn.addEventListener('click', function () {
-        landingError.textContent = '';
+        landingError.textContent = 'Generating…';
+        landingError.style.color = '';
         var company = (companyFilter.value || '').trim();
         var files = fileInput.files && fileInput.files.length > 0 ? fileInput.files : lastDroppedFiles;
         var pasteText = (csvPaste.value || '').trim();
@@ -345,6 +348,10 @@
           landingError.textContent = 'js/parser.js did not load. In your GitHub repo, add a folder named js with parser.js, globe2d.js, and world-land.js in the same folder as index.html.';
           return;
         }
+        if (typeof Globe2D !== 'function') {
+          landingError.textContent = 'js/globe2d.js did not load. Make sure globe2d.js is in the js folder.';
+          return;
+        }
         var result;
         try {
           result = csvTexts.length === 1
@@ -355,9 +362,10 @@
           return;
         }
         if (!result || result.totalEmployees === 0) {
-          landingError.textContent = 'No candidates found. Try a different company filter or check the CSV columns.';
+          landingError.textContent = 'No candidates found. Try a different company filter or check the CSV has columns like Name, Title, Location (or First Name, Last Name, Company, Location).';
           return;
         }
+        try {
         landing.classList.add('hidden');
         mapView.classList.add('visible');
         mapTitle.textContent = result.companyName + ' – Talent Density';
@@ -560,7 +568,10 @@
             if (viewSubtitle) viewSubtitle.textContent = 'Hover pins for snapshot · Click for detailed breakdown';
           });
         }
-      });
+        } catch (e) {
+          landingError.textContent = 'Error showing map: ' + (e && e.message ? e.message : String(e));
+        }
+      }
 
       panelClose.addEventListener('click', function () {
         panel.classList.remove('open');
@@ -570,5 +581,8 @@
       }
     })();
   </script>
+  <script src="js/parser.js"></script>
+  <script src="js/world-land.js"></script>
+  <script src="js/globe2d.js"></script>
 </body>
 </html>
