@@ -85,7 +85,7 @@
       display: none; flex: 1; min-height: 0; overflow: hidden; flex-direction: column;
       background: var(--bg-dark);
     }
-    #map-view.list-mode #list-view { display: flex; position: relative; z-index: 1; }
+    #map-view.list-mode #list-view { display: flex; position: relative; z-index: 1; padding-top: 5rem; }
     #map-view.list-mode .hint { display: none; }
     #list-view-content {
       flex: 1; overflow-y: auto; padding: 1rem 1.5rem;
@@ -667,13 +667,20 @@
         }
         try {
           showResult(result);
-          if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
-            var tiny = makeTinySharePayload(result);
-            if (tiny) {
-              var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(tiny));
-              if (compressed) {
-                var newUrl = location.pathname + (location.search || '') + '#' + compressed;
-                history.replaceState(null, '', newUrl);
+          var shareId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+          try {
+            sessionStorage.setItem('talent-map-' + shareId, JSON.stringify(result));
+            var newUrl = location.pathname + (location.search || '') + '#s=' + shareId;
+            history.replaceState(null, '', newUrl);
+          } catch (e) {
+            if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
+              var tiny = makeTinySharePayload(result);
+              if (tiny) {
+                var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(tiny));
+                if (compressed) {
+                  newUrl = location.pathname + (location.search || '') + '#' + compressed;
+                  history.replaceState(null, '', newUrl);
+                }
               }
             }
           }
@@ -749,17 +756,28 @@
       }
       function copyShareLink() {
         var url = location.href;
-        if (currentResult && mapView && mapView.classList.contains('visible') && typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
-          try {
-            var tiny = makeTinySharePayload(currentResult);
-            if (tiny) {
-              var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(tiny));
-              if (compressed) {
-                url = location.origin + location.pathname + (location.search || '') + '#' + compressed;
-                history.replaceState(null, '', url);
+        if (currentResult && mapView && mapView.classList.contains('visible')) {
+          if (location.hash.indexOf('s=') === 1) {
+            url = location.href;
+          } else {
+            try {
+              var shareId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+              sessionStorage.setItem('talent-map-' + shareId, JSON.stringify(currentResult));
+              url = location.origin + location.pathname + (location.search || '') + '#s=' + shareId;
+              history.replaceState(null, '', url);
+            } catch (e) {
+              if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
+                var tiny = makeTinySharePayload(currentResult);
+                if (tiny) {
+                  var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(tiny));
+                  if (compressed) {
+                    url = location.origin + location.pathname + (location.search || '') + '#' + compressed;
+                    history.replaceState(null, '', url);
+                  }
+                }
               }
             }
-          } catch (e) {}
+          }
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(url).then(function () { showShareFeedback('Link copied!'); }).catch(function () {
@@ -786,24 +804,40 @@
       }
       if (shareBtn) shareBtn.addEventListener('click', function (e) { e.preventDefault(); copyShareLink(); });
 
-      if (location.hash && location.hash.length > 1 && typeof LZString !== 'undefined') {
-        var hashPayload = location.hash.slice(1).replace(/ /g, '+');
+      if (location.hash && location.hash.length > 1) {
         var loaded = null;
-        try {
-          var decoded = LZString.decompressFromEncodedURIComponent(hashPayload);
-          if (decoded) {
-            var parsed = JSON.parse(decoded);
-            if (parsed && parsed.l && Array.isArray(parsed.l) && parsed.l.length > 0) {
-              loaded = expandTinyPayload(parsed);
-            } else if (parsed && parsed.locations && parsed.locations.length) {
-              loaded = parsed;
+        var hash = location.hash.slice(1);
+        if (hash.indexOf('s=') === 0) {
+          var shareId = hash.slice(2).split('&')[0];
+          try {
+            var stored = sessionStorage.getItem('talent-map-' + shareId);
+            if (stored) {
+              loaded = JSON.parse(stored);
             }
+          } catch (e) {}
+          if (loaded && loaded.locations && loaded.locations.length) {
+            showResult(loaded);
+          } else if (landingError) {
+            landingError.textContent = 'This link only works when opened in the same browser (e.g. new tab on the same computer) where it was created. To share with someone on another device, they would need to open the app and upload the CSV.';
           }
-        } catch (e) {}
-        if (loaded && loaded.locations && loaded.locations.length) {
-          showResult(loaded);
-        } else if (location.hash.length > 20) {
-          if (landingError) landingError.textContent = 'Shared link could not be loaded (link may be truncated). Try copying the link again from the address bar.';
+        } else if (typeof LZString !== 'undefined') {
+          var hashPayload = hash.replace(/ /g, '+');
+          try {
+            var decoded = LZString.decompressFromEncodedURIComponent(hashPayload);
+            if (decoded) {
+              var parsed = JSON.parse(decoded);
+              if (parsed && parsed.l && Array.isArray(parsed.l) && parsed.l.length > 0) {
+                loaded = expandTinyPayload(parsed);
+              } else if (parsed && parsed.locations && parsed.locations.length) {
+                loaded = parsed;
+              }
+            }
+          } catch (e) {}
+          if (loaded && loaded.locations && loaded.locations.length) {
+            showResult(loaded);
+          } else if (location.hash.length > 20 && landingError) {
+            landingError.textContent = 'Shared link could not be loaded (link may be truncated). Try copying the link again from the address bar.';
+          }
         }
       }
       } catch (e) {
