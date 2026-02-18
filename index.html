@@ -285,6 +285,7 @@
       var landingError = document.getElementById('landing-error');
       var landing = document.getElementById('landing');
       var mapView = document.getElementById('map-view');
+      var currentResult = null;
       if (!generateBtn || !landingError || !landing || !mapView) {
         showErr('Page error: missing elements. Check the page loaded correctly.');
         return;
@@ -374,6 +375,7 @@
       });
 
       function showResult(result) {
+        currentResult = result;
         landing.classList.add('hidden');
         mapView.classList.add('visible');
         mapTitle.textContent = result.companyName + ' – Talent Density';
@@ -665,7 +667,15 @@
         }
       }
       function copyShareLink() {
-        var url = location.href;
+        var url;
+        if (currentResult && mapView && mapView.classList.contains('visible') && typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
+          try {
+            var base = location.origin + location.pathname + (location.search || '');
+            url = base + '#' + LZString.compressToEncodedURIComponent(JSON.stringify(currentResult));
+          } catch (e) { url = location.href; }
+        } else {
+          url = location.href;
+        }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(url).then(function () { showShareFeedback('Link copied!'); }).catch(function () {
             fallbackCopy(url);
