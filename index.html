@@ -87,12 +87,24 @@
     }
     #map-view.list-mode #list-view { display: flex; position: relative; z-index: 1; }
     #map-view.list-mode .hint { display: none; }
-    #list-view-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; padding-top: 4rem; }
+    #list-view-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; padding-top: 5.5rem; }
     #list-view .list-view-header {
       position: absolute; top: 0; left: 0; right: 0; padding: 0.75rem 1.5rem;
       background: var(--bg-medium); border-bottom: 1px solid var(--border-color); z-index: 5;
       font-size: 0.9rem; color: var(--text-secondary);
     }
+    #list-view .list-view-search {
+      position: absolute; top: 2.75rem; left: 0; right: 0; padding: 0.5rem 1.5rem;
+      background: var(--bg-medium); border-bottom: 1px solid var(--border-color); z-index: 5;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    #list-view-search-input {
+      flex: 1; padding: 0.5rem 0.75rem; font-size: 0.9rem; background: var(--bg-dark);
+      border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);
+    }
+    #list-view-search-input::placeholder { color: var(--text-secondary); }
+    #list-view-search-input:focus { outline: none; border-color: var(--accent); }
+    .list-view-search-hint { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; }
     .view-toggle {
       padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-light); color: var(--text-primary);
       border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;
@@ -107,16 +119,16 @@
     .share-toast.visible { opacity: 1; }
     #ui-overlay {
       position: absolute; top: 0; left: 0; right: 0; padding: 1rem 1.5rem;
-      background: linear-gradient(to bottom, rgba(13,17,23,0.95) 0%, transparent 100%); pointer-events: none; z-index: 10;
+      background: linear-gradient(to bottom, rgba(13,17,23,0.95) 0%, transparent 100%); pointer-events: auto; z-index: 10;
       min-height: 4rem;
     }
-    #ui-overlay .inner { pointer-events: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
+    #ui-overlay .inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
     #ui-overlay h1 { margin: 0; font-size: 1.2rem; font-weight: 600; }
     #ui-overlay .subtitle { font-size: 0.8rem; color: var(--text-secondary); }
     #ui-overlay .stats { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-secondary); }
     #ui-overlay .stats strong { color: var(--text-primary); }
-    #ui-overlay .view-buttons { display: flex; gap: 0.5rem; align-items: center; pointer-events: auto; position: relative; z-index: 2; flex-shrink: 0; }
-    #ui-overlay .view-toggle { pointer-events: auto; cursor: pointer; }
+    #ui-overlay .view-buttons { display: flex; gap: 0.5rem; align-items: center; position: relative; z-index: 2; flex-shrink: 0; }
+    #ui-overlay .view-toggle { cursor: pointer; }
     #ui-overlay #btn-share-link { background: var(--accent); color: #fff; border-color: var(--accent); }
     #ui-overlay #btn-share-link:hover { filter: brightness(1.1); }
     #panel {
@@ -214,6 +226,10 @@
     <div id="globe-container"></div>
     <div id="list-view">
       <div class="list-view-header">Locations by talent density (highest → lowest). Click to expand stats.</div>
+      <div class="list-view-search">
+        <input type="text" id="list-view-search-input" placeholder="e.g. infrastructure engineers, perception, SF Bay Area" aria-label="Search by role, department, or location">
+        <span class="list-view-search-hint">Filter &amp; sort by match</span>
+      </div>
       <div id="list-view-content"></div>
     </div>
     <div id="ui-overlay">
@@ -537,6 +553,45 @@
           });
         }
 
+        function applyListSearch() {
+          var query = (listSearchInput && listSearchInput.value) ? listSearchInput.value.trim() : '';
+          var words = query ? query.toLowerCase().split(/\s+/).filter(Boolean) : [];
+          var list = result.locations;
+          if (words.length === 0) {
+            renderListView(list.slice().sort(function (a, b) { return b.count - a.count; }));
+            return;
+          }
+          var filtered = list.map(function (loc) {
+            var employees = loc.employees || [];
+            var byTitle = 0;
+            for (var i = 0; i < employees.length; i++) {
+              var t = (employees[i].title || '').toLowerCase();
+              if (words.every(function (w) { return t.indexOf(w) !== -1; })) byTitle++;
+            }
+            var deptTotal = 0;
+            var deptNames = Object.keys(loc.departments || {});
+            for (var d = 0; d < deptNames.length; d++) {
+              var dn = deptNames[d].toLowerCase();
+              if (words.every(function (w) { return dn.indexOf(w) !== -1; }))
+                deptTotal += (loc.departments[deptNames[d]].total || 0);
+            }
+            var labelMatch = (loc.label && words.every(function (w) { return (loc.label || '').toLowerCase().indexOf(w) !== -1; }));
+            var matchCount = byTitle || deptTotal || (labelMatch ? loc.count : 0);
+            var include = matchCount > 0 || labelMatch;
+            return { loc: loc, matchCount: matchCount, include: include };
+          }).filter(function (x) { return x.include; })
+            .sort(function (a, b) { return b.matchCount !== a.matchCount ? b.matchCount - a.matchCount : b.loc.count - a.loc.count; })
+            .map(function (x) { return x.loc; });
+          renderListView(filtered);
+        }
+
+        var listSearchInput = document.getElementById('list-view-search-input');
+        if (listSearchInput) {
+          listSearchInput.value = '';
+          listSearchInput.addEventListener('input', applyListSearch);
+          listSearchInput.addEventListener('keydown', function (e) { if (e.key === 'Escape') { listSearchInput.value = ''; applyListSearch(); listSearchInput.blur(); } });
+        }
+
         renderListView(result.locations);
 
         var mapViewEl = document.getElementById('map-view');
@@ -602,19 +657,39 @@
 
       var shareBtn = document.getElementById('btn-share-link');
       var shareToast = document.getElementById('share-toast');
-      if (shareBtn) {
-        shareBtn.addEventListener('click', function () {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(location.href).then(function () {
-              if (shareToast) { shareToast.textContent = 'Link copied!'; shareToast.classList.add('visible'); setTimeout(function () { shareToast.classList.remove('visible'); }, 2000); }
-            }).catch(function () {
-              if (shareToast) { shareToast.textContent = location.href; shareToast.classList.add('visible'); setTimeout(function () { shareToast.classList.remove('visible'); shareToast.textContent = 'Link copied!'; }, 4000); }
-            });
-          } else {
-            if (shareToast) { shareToast.textContent = location.href; shareToast.classList.add('visible'); setTimeout(function () { shareToast.classList.remove('visible'); }, 4000); }
-          }
-        });
+      function showShareFeedback(msg) {
+        if (shareToast) {
+          shareToast.textContent = msg;
+          shareToast.classList.add('visible');
+          setTimeout(function () { shareToast.classList.remove('visible'); shareToast.textContent = 'Link copied!'; }, 2500);
+        }
       }
+      function copyShareLink() {
+        var url = location.href;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(function () { showShareFeedback('Link copied!'); }).catch(function () {
+            fallbackCopy(url);
+          });
+        } else {
+          fallbackCopy(url);
+        }
+      }
+      function fallbackCopy(url) {
+        var ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          showShareFeedback('Link copied!');
+        } catch (e) {
+          showShareFeedback('Copy this link: ' + url);
+        }
+        document.body.removeChild(ta);
+      }
+      if (shareBtn) shareBtn.addEventListener('click', function (e) { e.preventDefault(); copyShareLink(); });
 
       if (location.hash && location.hash.length > 1 && typeof LZString !== 'undefined') {
         try {
