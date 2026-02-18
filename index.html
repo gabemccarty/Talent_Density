@@ -94,20 +94,23 @@
       font-size: 0.9rem; color: var(--text-secondary);
     }
     #list-view .list-view-search {
-      position: absolute; top: 2.75rem; left: 0; right: 0; padding: 0.75rem 1.5rem;
-      background: var(--bg-card); border-bottom: 2px solid var(--border-color); z-index: 5;
-      display: flex; align-items: center; gap: 0.75rem;
+      position: absolute; top: 2.75rem; left: 0; right: 0; padding: 1rem 1.5rem;
+      background: var(--bg-light); border-bottom: 2px solid var(--accent); border-left: 4px solid var(--accent);
+      display: flex; align-items: center; gap: 1rem; z-index: 5;
+    }
+    .list-view-search-label {
+      font-size: 1rem; font-weight: 700; color: var(--accent); white-space: nowrap;
     }
     #list-view-search-input {
-      flex: 1; padding: 0.65rem 1rem; font-size: 1rem; background: var(--bg-dark);
-      border: 2px solid var(--border-color); border-radius: 8px; color: var(--text-primary);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      flex: 1; padding: 0.75rem 1rem; font-size: 1.05rem; background: var(--bg-card);
+      border: 2px solid var(--accent); border-radius: 8px; color: var(--text-primary);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     }
     #list-view-search-input::placeholder { color: var(--text-secondary); }
     #list-view-search-input:focus {
-      outline: none; border-color: var(--accent); box-shadow: 0 2px 12px rgba(88,166,255,0.25);
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(88,166,255,0.35);
     }
-    .list-view-search-hint { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
+    .list-view-search-hint { font-size: 0.85rem; color: var(--text-primary); white-space: nowrap; font-weight: 600; }
     .view-toggle {
       padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-light); color: var(--text-primary);
       border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;
@@ -230,6 +233,7 @@
     <div id="list-view">
       <div class="list-view-header">Locations by talent density (highest → lowest). Click to expand stats.</div>
       <div class="list-view-search">
+        <span class="list-view-search-label">Search</span>
         <input type="text" id="list-view-search-input" placeholder="e.g. infrastructure engineers, perception, SF Bay Area" aria-label="Search by role, department, or location">
         <span class="list-view-search-hint">Filter &amp; sort by match</span>
       </div>
@@ -419,10 +423,13 @@
           var tierLevelNames = result.tierLevelNames;
           var departmentColors = result.departmentColors;
 
-          var byCompany = {};
-          for (var c = 0; c < employees.length; c++) {
-            var co = (employees[c].company || 'Unknown').trim() || 'Unknown';
-            byCompany[co] = (byCompany[co] || 0) + 1;
+          var byCompany = loc.byCompany || {};
+          if (employees.length > 0) {
+            byCompany = {};
+            for (var c = 0; c < employees.length; c++) {
+              var co = (employees[c].company || 'Unknown').trim() || 'Unknown';
+              byCompany[co] = (byCompany[co] || 0) + 1;
+            }
           }
           var companyNames = Object.keys(byCompany).sort(function (a, b) { return byCompany[b] - byCompany[a]; });
 
@@ -454,24 +461,29 @@
             body.className = 'dept-body';
             var hierarchy = deptData.hierarchy || {};
             var tierOrder = ['0','1','2','3','4','5','6','7','8','9'];
-            tierOrder.forEach(function (tierKey) {
-              if (!hierarchy[tierKey]) return;
-              var tier = hierarchy[tierKey];
-              var section = document.createElement('div');
-              section.className = 'tier-section';
-              section.innerHTML = '<div class="tier-title">' + escapeHtml(tier.level || tierLevelNames[tierKey]) + ' (' + (tier.employees ? tier.employees.length : 0) + ')</div>';
-              (tier.employees || []).forEach(function (emp) {
-                var empCard = document.createElement('div');
-                empCard.className = 'employee-card';
-                var linkedinUrl = normalizeLinkedInUrl(emp.linkedin);
-                var namePart = linkedinUrl
-                  ? '<a href="' + escapeHtml(linkedinUrl) + '" target="_blank" rel="noopener">' + escapeHtml(emp.name) + '</a>'
-                  : escapeHtml(emp.name);
-                empCard.innerHTML = '<div class="emp-name">' + namePart + '</div><div class="emp-title">' + escapeHtml(emp.title || '') + '</div><div class="emp-location">' + escapeHtml(emp.location || '') + '</div>';
-                section.appendChild(empCard);
+            var hasTiers = tierOrder.some(function (tierKey) { return hierarchy[tierKey] && (hierarchy[tierKey].employees || []).length > 0; });
+            if (hasTiers) {
+              tierOrder.forEach(function (tierKey) {
+                if (!hierarchy[tierKey]) return;
+                var tier = hierarchy[tierKey];
+                var section = document.createElement('div');
+                section.className = 'tier-section';
+                section.innerHTML = '<div class="tier-title">' + escapeHtml(tier.level || tierLevelNames[tierKey]) + ' (' + (tier.employees ? tier.employees.length : 0) + ')</div>';
+                (tier.employees || []).forEach(function (emp) {
+                  var empCard = document.createElement('div');
+                  empCard.className = 'employee-card';
+                  var linkedinUrl = normalizeLinkedInUrl(emp.linkedin);
+                  var namePart = linkedinUrl
+                    ? '<a href="' + escapeHtml(linkedinUrl) + '" target="_blank" rel="noopener">' + escapeHtml(emp.name) + '</a>'
+                    : escapeHtml(emp.name);
+                  empCard.innerHTML = '<div class="emp-name">' + namePart + '</div><div class="emp-title">' + escapeHtml(emp.title || '') + '</div><div class="emp-location">' + escapeHtml(emp.location || '') + '</div>';
+                  section.appendChild(empCard);
+                });
+                body.appendChild(section);
               });
-              body.appendChild(section);
-            });
+            } else {
+              body.innerHTML = '<div class="tier-title" style="color:var(--text-secondary);">Summary only (shared link)</div>';
+            }
             header.addEventListener('click', function () { card.classList.toggle('collapsed'); });
             card.appendChild(header);
             card.appendChild(body);
@@ -528,10 +540,13 @@
             var employees = loc.employees || [];
             var depts = loc.departments || {};
             var deptNames = Object.keys(depts).sort(function (a, b) { return (depts[b].total || 0) - (depts[a].total || 0); });
-            var byCompany = {};
-            for (var i = 0; i < employees.length; i++) {
-              var co = (employees[i].company || 'Unknown').trim() || 'Unknown';
-              byCompany[co] = (byCompany[co] || 0) + 1;
+            var byCompany = loc.byCompany || {};
+            if (employees.length > 0) {
+              byCompany = {};
+              for (var i = 0; i < employees.length; i++) {
+                var co = (employees[i].company || 'Unknown').trim() || 'Unknown';
+                byCompany[co] = (byCompany[co] || 0) + 1;
+              }
             }
             var companyNames = Object.keys(byCompany).sort(function (a, b) { return byCompany[b] - byCompany[a]; });
 
@@ -645,12 +660,15 @@
           return;
         }
         try {
-          if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
-            location.hash = '#' + LZString.compressToEncodedURIComponent(JSON.stringify(result));
-          }
-        } catch (e) {}
-        try {
           showResult(result);
+          if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
+            var shareable = buildShareableResult(result);
+            var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(shareable));
+            if (compressed) {
+              var newUrl = location.pathname + (location.search || '') + '#' + compressed;
+              history.replaceState(null, '', newUrl);
+            }
+          }
         } catch (e) {
           landingError.textContent = 'Error showing map: ' + (e && e.message ? e.message : String(e));
         }
@@ -669,15 +687,52 @@
           setTimeout(function () { shareToast.classList.remove('visible'); shareToast.textContent = 'Link copied!'; }, 2500);
         }
       }
+      function buildShareableResult(result) {
+        if (!result || !result.locations) return result;
+        var locs = [];
+        for (var i = 0; i < result.locations.length; i++) {
+          var loc = result.locations[i];
+          var byCompany = {};
+          var employees = loc.employees || [];
+          for (var c = 0; c < employees.length; c++) {
+            var co = (employees[c].company || 'Unknown').trim() || 'Unknown';
+            byCompany[co] = (byCompany[co] || 0) + 1;
+          }
+          var depts = {};
+          var dKeys = Object.keys(loc.departments || {});
+          for (var d = 0; d < dKeys.length; d++) {
+            depts[dKeys[d]] = { total: (loc.departments[dKeys[d]].total || 0) };
+          }
+          locs.push({
+            key: loc.key,
+            label: loc.label,
+            lat: loc.lat,
+            lng: loc.lng,
+            count: loc.count,
+            employees: [],
+            departments: depts,
+            byCompany: byCompany
+          });
+        }
+        return {
+          companyName: result.companyName,
+          totalEmployees: result.totalEmployees,
+          locations: locs,
+          tierLevelNames: result.tierLevelNames,
+          departmentColors: result.departmentColors
+        };
+      }
       function copyShareLink() {
-        var url;
-        if (currentResult && mapView && mapView.classList.contains('visible') && typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
+        var url = location.href;
+        if (currentResult && mapView && mapView.classList.contains('visible') && (!location.hash || location.hash.length < 10) && typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
           try {
-            var base = location.origin + location.pathname + (location.search || '');
-            url = base + '#' + LZString.compressToEncodedURIComponent(JSON.stringify(currentResult));
-          } catch (e) { url = location.href; }
-        } else {
-          url = location.href;
+            var payload = buildShareableResult(currentResult);
+            var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+            if (compressed) {
+              url = location.origin + location.pathname + (location.search || '') + '#' + compressed;
+              history.replaceState(null, '', url);
+            }
+          } catch (e) {}
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(url).then(function () { showShareFeedback('Link copied!'); }).catch(function () {
@@ -710,7 +765,9 @@
           var decoded = LZString.decompressFromEncodedURIComponent(payload);
           if (decoded) {
             var loaded = JSON.parse(decoded);
-            if (loaded && loaded.locations && loaded.locations.length) showResult(loaded);
+            if (loaded && loaded.locations && loaded.locations.length) {
+              showResult(loaded);
+            }
           }
         } catch (e) {}
       }
