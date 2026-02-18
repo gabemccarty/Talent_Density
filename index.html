@@ -99,6 +99,12 @@
     }
     .view-toggle:hover { background: var(--border-color); }
     .view-toggle.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .share-toast {
+      position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+      padding: 0.5rem 1rem; background: var(--accent); color: #fff; border-radius: 8px;
+      font-size: 0.85rem; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .share-toast.visible { opacity: 1; }
     #ui-overlay {
       position: absolute; top: 0; left: 0; right: 0; padding: 1rem 1.5rem;
       background: linear-gradient(to bottom, rgba(13,17,23,0.95) 0%, transparent 100%); pointer-events: none; z-index: 10;
@@ -218,9 +224,11 @@
           <span class="stat"><strong id="location-count">0</strong> locations</span>
         </div>
         <div class="view-buttons">
+          <button type="button" class="view-toggle" id="btn-share-link" aria-label="Copy share link">Share link</button>
           <button type="button" class="view-toggle active" id="btn-globe-view" aria-label="Globe view">Globe</button>
           <button type="button" class="view-toggle" id="btn-list-view" aria-label="List view">List view</button>
         </div>
+        <div id="share-toast" class="share-toast" aria-live="polite">Link copied!</div>
       </div>
     </div>
     <div id="panel">
@@ -235,7 +243,10 @@
     <div id="globe-tooltip" aria-live="polite"></div>
   </div>
 
-  <!-- Run this first so the Generate button always gets a click handler -->
+  <script src="js/parser.js"></script>
+  <script src="js/world-land.js"></script>
+  <script src="js/globe2d.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
   <script>
     (function () {
       var errEl = document.getElementById('landing-error');
@@ -343,29 +354,7 @@
         runGenerate(csvTexts, company);
       });
 
-      function runGenerate(csvTexts, company) {
-        if (!window.TalentMapParser) {
-          landingError.textContent = 'js/parser.js did not load. In your GitHub repo, add a folder named js with parser.js, globe2d.js, and world-land.js in the same folder as index.html.';
-          return;
-        }
-        if (typeof Globe2D !== 'function') {
-          landingError.textContent = 'js/globe2d.js did not load. Make sure globe2d.js is in the js folder.';
-          return;
-        }
-        var result;
-        try {
-          result = csvTexts.length === 1
-            ? window.TalentMapParser.processCSV(csvTexts[0], company || undefined)
-            : window.TalentMapParser.processMultipleCSVs(csvTexts, company || undefined);
-        } catch (err) {
-          landingError.textContent = 'Failed to parse CSV: ' + (err.message || err);
-          return;
-        }
-        if (!result || result.totalEmployees === 0) {
-          landingError.textContent = 'No candidates found. Try a different company filter or check the CSV has columns like Name, Title, Location (or First Name, Last Name, Company, Location).';
-          return;
-        }
-        try {
+      function showResult(result) {
         landing.classList.add('hidden');
         mapView.classList.add('visible');
         mapTitle.textContent = result.companyName + ' – Talent Density';
@@ -568,6 +557,37 @@
             if (viewSubtitle) viewSubtitle.textContent = 'Hover pins for snapshot · Click for detailed breakdown';
           });
         }
+      }
+
+      function runGenerate(csvTexts, company) {
+        if (!window.TalentMapParser) {
+          landingError.textContent = 'js/parser.js did not load. In your GitHub repo, add a folder named js with parser.js, globe2d.js, and world-land.js in the same folder as index.html.';
+          return;
+        }
+        if (typeof Globe2D !== 'function') {
+          landingError.textContent = 'js/globe2d.js did not load. Make sure globe2d.js is in the js folder.';
+          return;
+        }
+        var result;
+        try {
+          result = csvTexts.length === 1
+            ? window.TalentMapParser.processCSV(csvTexts[0], company || undefined)
+            : window.TalentMapParser.processMultipleCSVs(csvTexts, company || undefined);
+        } catch (err) {
+          landingError.textContent = 'Failed to parse CSV: ' + (err.message || err);
+          return;
+        }
+        if (!result || result.totalEmployees === 0) {
+          landingError.textContent = 'No candidates found. Try a different company filter or check the CSV has columns like Name, Title, Location (or First Name, Last Name, Company, Location).';
+          return;
+        }
+        try {
+          if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
+            location.hash = '#' + LZString.compressToEncodedURIComponent(JSON.stringify(result));
+          }
+        } catch (e) {}
+        try {
+          showResult(result);
         } catch (e) {
           landingError.textContent = 'Error showing map: ' + (e && e.message ? e.message : String(e));
         }
@@ -576,14 +596,38 @@
       panelClose.addEventListener('click', function () {
         panel.classList.remove('open');
       });
+
+      var shareBtn = document.getElementById('btn-share-link');
+      var shareToast = document.getElementById('share-toast');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', function () {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(location.href).then(function () {
+              if (shareToast) { shareToast.textContent = 'Link copied!'; shareToast.classList.add('visible'); setTimeout(function () { shareToast.classList.remove('visible'); }, 2000); }
+            }).catch(function () {
+              if (shareToast) { shareToast.textContent = location.href; shareToast.classList.add('visible'); setTimeout(function () { shareToast.classList.remove('visible'); shareToast.textContent = 'Link copied!'; }, 4000); }
+            });
+          } else {
+            if (shareToast) { shareToast.textContent = location.href; shareToast.classList.add('visible'); setTimeout(function () { shareToast.classList.remove('visible'); }, 4000); }
+          }
+        });
+      }
+
+      if (location.hash && location.hash.length > 1 && typeof LZString !== 'undefined') {
+        try {
+          var payload = location.hash.slice(1);
+          var decoded = LZString.decompressFromEncodedURIComponent(payload);
+          if (decoded) {
+            var loaded = JSON.parse(decoded);
+            if (loaded && loaded.locations && loaded.locations.length) showResult(loaded);
+          }
+        } catch (e) {}
+      }
       } catch (e) {
         if (errEl) errEl.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
       }
     }
     )();
   </script>
-  <script src="js/parser.js"></script>
-  <script src="js/world-land.js"></script>
-  <script src="js/globe2d.js"></script>
 </body>
 </html>
