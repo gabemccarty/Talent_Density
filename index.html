@@ -315,7 +315,7 @@
       }
 
       generateBtn.addEventListener('click', function () {
-        landingError.textContent = 'Generating…';
+        landingError.textContent = 'Generating...';
         landingError.style.color = '';
         var company = (companyFilter.value || '').trim();
         var files = fileInput.files && fileInput.files.length > 0 ? fileInput.files : lastDroppedFiles;
@@ -577,9 +577,10 @@
         panel.classList.remove('open');
       });
       } catch (e) {
-        showErr('Error: ' + (e && e.message ? e.message : String(e)));
+        if (errEl) errEl.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
       }
-    })();
+    }
+    )();
   </script>
   <script src="js/parser.js"></script>
   <script src="js/world-land.js"></script>
