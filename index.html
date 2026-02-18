@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Talent Density – Talent Mapping</title>
+  <style>
+    :root {
+      --bg-dark: #0d1117;
+      --bg-medium: #161b22;
+      --bg-light: #21262d;
+      --bg-card: #1c2128;
+      --text-primary: #f0f6fc;
+      --text-secondary: #8b949e;
+      --border-color: #30363d;
+      --accent: #58a6ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-dark); color: var(--text-primary); }
+    #landing {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 9999; pointer-events: auto;
+    }
+    #landing.hidden { display: none; }
+    .landing-card {
+      position: relative;
+      width: 100%; max-width: 480px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; pointer-events: auto;
+    }
+    .landing-card h1 { margin: 0 0 8px 0; font-size: 1.35rem; }
+    .landing-card p { color: var(--text-secondary); font-size: 0.9rem; margin: 0 0 16px 0; }
+    .landing-card label { display: block; font-size: 0.85rem; margin-bottom: 4px; color: var(--text-secondary); }
+    .landing-card input[type="text"] {
+      width: 100%; padding: 10px 12px; margin-bottom: 16px; background: var(--bg-light); border: 1px solid var(--border-color);
+      border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;
+    }
+    .landing-card textarea {
+      width: 100%; height: 160px; padding: 12px; margin-bottom: 12px; background: var(--bg-light); border: 1px solid var(--border-color);
+      border-radius: 6px; color: var(--text-primary); font-size: 0.8rem; font-family: inherit; resize: vertical;
+    }
+    .landing-card .file-input-label { display: block; font-size: 0.85rem; margin-bottom: 6px; color: var(--text-secondary); }
+    .landing-card .file-input-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+    .landing-card #file-input {
+      flex: 1;
+      min-width: 140px;
+      padding: 10px;
+      background: var(--bg-light);
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      cursor: pointer;
+      box-sizing: border-box;
+      pointer-events: auto;
+    }
+    .landing-card #file-input:hover, .landing-card #file-input:focus { border-color: var(--accent); outline: none; }
+    .landing-card .browse-btn {
+      padding: 10px 16px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .landing-card .browse-btn:hover { filter: brightness(1.1); }
+    .landing-card .drop-zone {
+      border: 2px dashed var(--border-color); border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 16px;
+      color: var(--text-secondary); font-size: 0.85rem; transition: border-color 0.2s; cursor: pointer; pointer-events: auto;
+    }
+    .landing-card .drop-zone.dragover { border-color: var(--accent); color: var(--text-primary); }
+    .landing-card button {
+      width: 100%; padding: 12px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 1rem; font-weight: 500; cursor: pointer;
+    }
+    .landing-card button:hover { filter: brightness(1.1); }
+    .landing-card button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .landing-card .error { color: #f85149; font-size: 0.85rem; margin-top: 8px; }
+    .landing-card .file-attached { color: var(--accent); font-size: 0.85rem; margin-top: 6px; }
+    #map-view { position: absolute; inset: 0; display: none; flex-direction: column; z-index: 1; }
+    #map-view.visible { display: flex; }
+    #globe-container { flex: 1; position: relative; min-height: 0; }
+    #globe-container canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    #globe-container:active { cursor: grabbing; }
+    #map-view.list-mode #globe-container { display: none; }
+    #list-view {
+      display: none; flex: 1; min-height: 0; overflow: hidden; flex-direction: column;
+      background: var(--bg-dark);
+    }
+    #map-view.list-mode #list-view { display: flex; position: relative; z-index: 1; }
+    #map-view.list-mode .hint { display: none; }
+    #list-view-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; padding-top: 4rem; }
+    #list-view .list-view-header {
+      position: absolute; top: 0; left: 0; right: 0; padding: 0.75rem 1.5rem;
+      background: var(--bg-medium); border-bottom: 1px solid var(--border-color); z-index: 5;
+      font-size: 0.9rem; color: var(--text-secondary);
+    }
+    .view-toggle {
+      padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-light); color: var(--text-primary);
+      border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;
+    }
+    .view-toggle:hover { background: var(--border-color); }
+    .view-toggle.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #ui-overlay {
+      position: absolute; top: 0; left: 0; right: 0; padding: 1rem 1.5rem;
+      background: linear-gradient(to bottom, rgba(13,17,23,0.95) 0%, transparent 100%); pointer-events: none; z-index: 10;
+    }
+    #ui-overlay .inner { pointer-events: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
+    #ui-overlay h1 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+    #ui-overlay .subtitle { font-size: 0.8rem; color: var(--text-secondary); }
+    #ui-overlay .stats { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-secondary); }
+    #ui-overlay .stats strong { color: var(--text-primary); }
+    #ui-overlay .view-buttons { display: flex; gap: 0.5rem; align-items: center; pointer-events: auto; position: relative; z-index: 2; }
+    #ui-overlay .view-toggle { pointer-events: auto; cursor: pointer; }
+    #panel {
+      position: absolute; top: 0; right: 0; width: min(400px, 100vw); max-width: 100%; height: 100%;
+      background: var(--bg-medium); border-left: 1px solid var(--border-color); box-shadow: -8px 0 24px rgba(0,0,0,0.4);
+      transform: translateX(100%); transition: transform 0.3s ease; z-index: 20; display: flex; flex-direction: column; overflow: hidden;
+    }
+    #panel.open { transform: translateX(0); }
+    #panel-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); background: var(--bg-card); flex-shrink: 0; }
+    #panel-header h2 { margin: 0 0 0.25rem 0; font-size: 1.05rem; }
+    #panel-header .meta { font-size: 0.8rem; color: var(--text-secondary); }
+    #panel-close {
+      position: absolute; top: 1rem; right: 1rem; width: 32px; height: 32px; border: none; background: var(--bg-light);
+      color: var(--text-primary); border-radius: 6px; cursor: pointer; font-size: 1.2rem; line-height: 1; padding: 0;
+    }
+    #panel-close:hover { background: var(--border-color); }
+    #panel-content { flex: 1; overflow-y: auto; padding: 1rem; }
+    .dept-card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.75rem; overflow: hidden;
+    }
+    .dept-card .dept-header {
+      padding: 0.65rem 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+      border-left: 4px solid var(--dept-color, var(--border-color)); transition: background 0.2s;
+    }
+    .dept-card .dept-header:hover { background: var(--bg-light); }
+    .dept-card .dept-name { font-weight: 600; font-size: 0.9rem; }
+    .dept-card .dept-count { font-size: 0.8rem; color: var(--text-secondary); }
+    .dept-card .dept-body { padding: 0 0.85rem 0.85rem; }
+    .dept-card.collapsed .dept-body { display: none; }
+    .tier-section { margin-top: 0.65rem; }
+    .tier-section .tier-title {
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);
+      margin-bottom: 0.35rem; padding-left: 0.25rem; border-left: 2px solid var(--dept-color, var(--border-color));
+    }
+    .employee-card {
+      padding: 0.5rem 0.6rem; margin-bottom: 0.25rem; background: var(--bg-light); border-radius: 6px;
+      border-left: 3px solid var(--dept-color, var(--border-color)); transition: transform 0.2s;
+    }
+    .employee-card:hover { transform: translateX(4px); }
+    .employee-card .emp-name { font-weight: 500; font-size: 0.9rem; }
+    .employee-card .emp-name a { color: var(--accent); text-decoration: none; }
+    .employee-card .emp-name a:hover { text-decoration: underline; }
+    .employee-card .emp-title { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.15rem; }
+    .employee-card .emp-location { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.1rem; }
+    .hint {
+      position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); font-size: 0.75rem; color: var(--text-secondary);
+      background: rgba(22,27,34,0.9); padding: 0.5rem 1rem; border-radius: 8px; pointer-events: none; z-index: 10;
+    }
+    #globe-tooltip {
+      display: none; position: fixed; z-index: 30; max-width: 320px;
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 0.75rem 1rem; font-size: 0.85rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+    #globe-tooltip.visible { display: block; }
+    #globe-tooltip .tooltip-title { font-weight: 600; margin-bottom: 0.35rem; color: var(--text-primary); }
+    #globe-tooltip .tooltip-density { font-size: 0.8rem; color: var(--accent); margin-bottom: 0.5rem; }
+    #globe-tooltip .tooltip-profiles { margin-top: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.5rem; }
+    #globe-tooltip .tooltip-profiles .profile { margin-bottom: 0.35rem; font-size: 0.8rem; }
+    #globe-tooltip .tooltip-profiles .profile .name { font-weight: 500; color: var(--text-primary); }
+    #globe-tooltip .tooltip-profiles .profile .role { color: var(--text-secondary); }
+    .location-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.75rem; overflow: hidden; }
+    .location-card .location-header { padding: 0.75rem 1rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+    .location-card .location-header:hover { background: var(--bg-light); }
+    .location-card .location-header .loc-count { font-weight: normal; color: var(--text-secondary); font-size: 0.9rem; }
+    .location-card .location-body { padding: 0 1rem 1rem; display: none; }
+    .location-card.expanded .location-body { display: block; }
+    .location-card .location-stats { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
+    .location-card .location-stats .stat-row { margin-bottom: 0.25rem; }
+    .location-card .location-stats strong { color: var(--text-primary); }
+  </style>
+</head>
+<body>
+  <div id="landing">
+    <div class="landing-card">
+      <h1>Talent Density Map</h1>
+      <p>Add one or more Gem CSV exports (choose file, drag-and-drop, or paste below). Optionally filter by company.</p>
+      <p style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 12px 0;">If &quot;Choose file&quot; or drag-drop don&apos;t work, paste your CSV in the box below and click Generate Map.</p>
+      <label for="company-filter">Company filter (optional)</label>
+      <input type="text" id="company-filter" placeholder="e.g. Meta">
+      <label class="file-input-label" for="file-input">Choose CSV file(s)</label>
+      <div class="file-input-row">
+        <input type="file" id="file-input" accept=".csv,text/csv,text/plain" multiple aria-label="Choose CSV files">
+        <button type="button" id="browse-btn" class="browse-btn">Browse for CSV files</button>
+      </div>
+      <div id="file-attached" class="file-attached" aria-live="polite"></div>
+      <div class="drop-zone" id="drop-zone">Or drag and drop CSV files here</div>
+      <label for="csv-paste">Or paste CSV below (copy from Excel/Sheets, then paste here)</label>
+      <textarea id="csv-paste" placeholder="Paste CSV here: header row first, then one row per person"></textarea>
+      <button type="button" id="generate-btn">Generate Map</button>
+      <div class="error" id="landing-error"></div>
+    </div>
+  </div>
+  <div id="map-view">
+    <div id="globe-container"></div>
+    <div id="list-view">
+      <div class="list-view-header">Locations by talent density (highest → lowest). Click to expand stats.</div>
+      <div id="list-view-content"></div>
+    </div>
+    <div id="ui-overlay">
+      <div class="inner">
+        <div>
+          <h1 id="map-title">Talent Map</h1>
+          <div class="subtitle" id="view-subtitle">Hover pins for snapshot · Click for detailed breakdown</div>
+        </div>
+        <div class="stats">
+          <span class="stat"><strong id="total-count">0</strong> candidates</span>
+          <span class="stat"><strong id="location-count">0</strong> locations</span>
+        </div>
+        <div class="view-buttons">
+          <button type="button" class="view-toggle active" id="btn-globe-view" aria-label="Globe view">Globe</button>
+          <button type="button" class="view-toggle" id="btn-list-view" aria-label="List view">List view</button>
+        </div>
+      </div>
+    </div>
+    <div id="panel">
+      <div id="panel-header">
+        <button id="panel-close" type="button" aria-label="Close">&times;</button>
+        <h2 id="panel-title">Location</h2>
+        <div class="meta" id="panel-meta"></div>
+      </div>
+      <div id="panel-content"></div>
+    </div>
+    <div class="hint" id="globe-hint">Drag to rotate · Scroll to zoom · Hover pins for snapshot · Click for detailed breakdown</div>
+    <div id="globe-tooltip" aria-live="polite"></div>
+  </div>
+
+  <script src="js/parser.js"></script>
+  <script src="js/world-land.js"></script>
+  <script src="js/globe2d.js"></script>
+  <script>
+    (function () {
+      var errEl = document.getElementById('landing-error');
+      function showErr(msg) { if (errEl) errEl.textContent = msg; }
+      try {
+      var dropZone = document.getElementById('drop-zone');
+      var fileInput = document.getElementById('file-input');
+      var fileAttached = document.getElementById('file-attached');
+      var lastDroppedFiles = [];
+      if (!fileInput) { showErr('Page error: file input not found.'); return; }
+      if (!dropZone) { showErr('Page error: drop zone not found.'); return; }
+      var browseBtn = document.getElementById('browse-btn');
+      if (browseBtn) browseBtn.addEventListener('click', function () { fileInput.click(); });
+      var csvPaste = document.getElementById('csv-paste');
+      var companyFilter = document.getElementById('company-filter');
+      var generateBtn = document.getElementById('generate-btn');
+      var landingError = document.getElementById('landing-error');
+      var landing = document.getElementById('landing');
+      var mapView = document.getElementById('map-view');
+      var mapTitle = document.getElementById('map-title');
+      var totalCount = document.getElementById('total-count');
+      var locationCount = document.getElementById('location-count');
+      var panelClose = document.getElementById('panel-close');
+      var panel = document.getElementById('panel');
+
+      dropZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('dragover');
+      });
+      dropZone.addEventListener('dragleave', function () {
+        dropZone.classList.remove('dragover');
+      });
+      dropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('dragover');
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files.length) {
+          lastDroppedFiles = Array.prototype.slice.call(files);
+          updateFileList(files);
+        }
+      });
+
+      fileInput.addEventListener('change', function () {
+        lastDroppedFiles = [];
+        var files = fileInput.files;
+        if (files && files.length) updateFileList(files);
+      });
+
+      function updateFileList(files) {
+        var n = files.length;
+        fileAttached.textContent = n === 1 ? 'Attached: ' + files[0].name : n + ' files attached: ' + Array.prototype.map.call(files, function (f) { return f.name; }).join(', ');
+      }
+
+      function readFilesAsTexts(files, done) {
+        var count = files.length;
+        if (count === 0) { done([]); return; }
+        var results = [];
+        var doneCount = 0;
+        function onLoad(i) {
+          return function () {
+            results[i] = this.result;
+            doneCount++;
+            if (doneCount === count) done(results);
+          };
+        }
+        for (var i = 0; i < count; i++) {
+          var reader = new FileReader();
+          reader.onload = onLoad(i);
+          reader.readAsText(files[i], 'utf8');
+        }
+      }
+
+      generateBtn.addEventListener('click', function () {
+        landingError.textContent = '';
+        var company = (companyFilter.value || '').trim();
+        var files = fileInput.files && fileInput.files.length > 0 ? fileInput.files : lastDroppedFiles;
+        var pasteText = (csvPaste.value || '').trim();
+        var csvTexts = [];
+        if (files && files.length > 0) {
+          generateBtn.disabled = true;
+          readFilesAsTexts(files, function (texts) {
+            generateBtn.disabled = false;
+            csvTexts = texts.filter(function (t) { return (t || '').trim().length > 0; });
+            if (pasteText) csvTexts.push(pasteText);
+            if (csvTexts.length === 0) {
+              landingError.textContent = 'Please add at least one CSV (files or paste).';
+              return;
+            }
+            runGenerate(csvTexts, company);
+          });
+          return;
+        }
+        if (pasteText) csvTexts.push(pasteText);
+        if (csvTexts.length === 0) {
+          landingError.textContent = 'Please paste CSV content or drop one or more files.';
+          return;
+        }
+        runGenerate(csvTexts, company);
+      });
+
+      function runGenerate(csvTexts, company) {
+        if (!window.TalentMapParser) {
+          landingError.textContent = 'js/parser.js did not load. In your GitHub repo, add a folder named js with parser.js, globe2d.js, and world-land.js in the same folder as index.html.';
+          return;
+        }
+        var result;
+        try {
+          result = csvTexts.length === 1
+            ? window.TalentMapParser.processCSV(csvTexts[0], company || undefined)
+            : window.TalentMapParser.processMultipleCSVs(csvTexts, company || undefined);
+        } catch (err) {
+          landingError.textContent = 'Failed to parse CSV: ' + (err.message || err);
+          return;
+        }
+        if (!result || result.totalEmployees === 0) {
+          landingError.textContent = 'No candidates found. Try a different company filter or check the CSV columns.';
+          return;
+        }
+        landing.classList.add('hidden');
+        mapView.classList.add('visible');
+        mapTitle.textContent = result.companyName + ' – Talent Density';
+        totalCount.textContent = result.totalEmployees;
+        locationCount.textContent = result.locations.length;
+
+        var container = document.getElementById('globe-container');
+        container.innerHTML = '';
+        var tooltipEl = document.getElementById('globe-tooltip');
+
+        function escapeHtml(s) {
+          if (s == null) return '';
+          var div = document.createElement('div');
+          div.textContent = s;
+          return div.innerHTML;
+        }
+        function normalizeLinkedInUrl(url) {
+          if (!url || typeof url !== 'string') return '';
+          var s = String(url).replace(/^["']|["']$/g, '').trim();
+          if (!s) return '';
+          var match = s.match(/linkedin\.com\/in\/([a-zA-Z0-9_.-]+)/i);
+          if (match && match[1]) return 'https://www.linkedin.com/in/' + match[1];
+          var slug = s.replace(/^.*\/in\/?/i, '').replace(/[\?#].*$/, '').replace(/\/.*$/, '').replace(/^\/+|\/+$/g, '').trim();
+          return slug ? 'https://www.linkedin.com/in/' + slug : '';
+        }
+
+        function openPanel(loc) {
+          var titleEl = document.getElementById('panel-title');
+          var metaEl = document.getElementById('panel-meta');
+          var contentEl = document.getElementById('panel-content');
+          titleEl.textContent = loc.label || 'Unknown';
+          metaEl.textContent = loc.count + ' engineers at this location';
+          contentEl.innerHTML = '';
+
+          var employees = loc.employees || [];
+          var depts = loc.departments || {};
+          var deptNames = Object.keys(depts).sort(function (a, b) { return (depts[b].total || 0) - (depts[a].total || 0); });
+          var tierLevelNames = result.tierLevelNames;
+          var departmentColors = result.departmentColors;
+
+          var byCompany = {};
+          for (var c = 0; c < employees.length; c++) {
+            var co = (employees[c].company || 'Unknown').trim() || 'Unknown';
+            byCompany[co] = (byCompany[co] || 0) + 1;
+          }
+          var companyNames = Object.keys(byCompany).sort(function (a, b) { return byCompany[b] - byCompany[a]; });
+
+          var overview = document.createElement('div');
+          overview.className = 'dept-card';
+          overview.style.setProperty('--dept-color', 'var(--accent)');
+          overview.innerHTML = '<div class="dept-header" style="cursor:default;"><span class="dept-name">Talent breakdown</span></div><div class="dept-body"></div>';
+          var bodyInner = overview.querySelector('.dept-body');
+          bodyInner.innerHTML = '<div class="tier-title" style="margin-bottom:0.5rem;">By company</div>';
+          companyNames.slice(0, 10).forEach(function (co) {
+            bodyInner.innerHTML += '<div class="stat-row"><strong>' + escapeHtml(co) + '</strong>: ' + byCompany[co] + '</div>';
+          });
+          bodyInner.innerHTML += '<div class="tier-title" style="margin:0.75rem 0 0.5rem 0;">By engineering type</div>';
+          deptNames.forEach(function (dn) {
+            bodyInner.innerHTML += '<div class="stat-row"><strong>' + escapeHtml(dn) + '</strong>: ' + (depts[dn].total || 0) + '</div>';
+          });
+          contentEl.appendChild(overview);
+
+          deptNames.forEach(function (deptName) {
+            var deptData = depts[deptName];
+            var color = departmentColors[deptName] || '#8b949e';
+            var card = document.createElement('div');
+            card.className = 'dept-card collapsed';
+            card.style.setProperty('--dept-color', color);
+            var header = document.createElement('div');
+            header.className = 'dept-header';
+            header.innerHTML = '<span class="dept-name">' + escapeHtml(deptName) + '</span><span class="dept-count">' + (deptData.total || 0) + ' employees</span>';
+            var body = document.createElement('div');
+            body.className = 'dept-body';
+            var hierarchy = deptData.hierarchy || {};
+            var tierOrder = ['0','1','2','3','4','5','6','7','8','9'];
+            tierOrder.forEach(function (tierKey) {
+              if (!hierarchy[tierKey]) return;
+              var tier = hierarchy[tierKey];
+              var section = document.createElement('div');
+              section.className = 'tier-section';
+              section.innerHTML = '<div class="tier-title">' + escapeHtml(tier.level || tierLevelNames[tierKey]) + ' (' + (tier.employees ? tier.employees.length : 0) + ')</div>';
+              (tier.employees || []).forEach(function (emp) {
+                var empCard = document.createElement('div');
+                empCard.className = 'employee-card';
+                var linkedinUrl = normalizeLinkedInUrl(emp.linkedin);
+                var namePart = linkedinUrl
+                  ? '<a href="' + escapeHtml(linkedinUrl) + '" target="_blank" rel="noopener">' + escapeHtml(emp.name) + '</a>'
+                  : escapeHtml(emp.name);
+                empCard.innerHTML = '<div class="emp-name">' + namePart + '</div><div class="emp-title">' + escapeHtml(emp.title || '') + '</div><div class="emp-location">' + escapeHtml(emp.location || '') + '</div>';
+                section.appendChild(empCard);
+              });
+              body.appendChild(section);
+            });
+            header.addEventListener('click', function () { card.classList.toggle('collapsed'); });
+            card.appendChild(header);
+            card.appendChild(body);
+            contentEl.appendChild(card);
+          });
+          panel.classList.add('open');
+        }
+
+        function onPinHover(loc, e) {
+          if (!tooltipEl) return;
+          if (!loc || !e) {
+            tooltipEl.classList.remove('visible');
+            return;
+          }
+          var top3 = (loc.employees || []).slice(0, 3);
+          var label = loc.label || 'Unknown';
+          var count = loc.count != null ? loc.count : 0;
+          var html = '<div class="tooltip-title">' + escapeHtml(label) + '</div>';
+          html += '<div class="tooltip-density">Talent density: ' + count + ' engineer' + (count !== 1 ? 's' : '') + ' in this area</div>';
+          if (top3.length) {
+            html += '<div class="tooltip-profiles"><strong>Top profiles</strong>';
+            top3.forEach(function (emp) {
+              var role = (emp.title || '').trim();
+              if (emp.company) role += (role ? ' at ' : '') + emp.company;
+              html += '<div class="profile"><span class="name">' + escapeHtml(emp.name) + '</span><br><span class="role">' + escapeHtml(role) + '</span></div>';
+            });
+            html += '</div>';
+          }
+          tooltipEl.style.left = (e.clientX + 14) + 'px';
+          tooltipEl.style.top = (e.clientY + 14) + 'px';
+          tooltipEl.innerHTML = html;
+          tooltipEl.classList.add('visible');
+          var r = tooltipEl.getBoundingClientRect();
+          var x = r.left;
+          var y = r.top;
+          if (r.right > window.innerWidth) x = window.innerWidth - r.width - 8;
+          if (r.bottom > window.innerHeight) y = window.innerHeight - r.height - 8;
+          if (x < 8) x = 8;
+          if (y < 8) y = 8;
+          tooltipEl.style.left = x + 'px';
+          tooltipEl.style.top = y + 'px';
+        }
+
+        var globe = new Globe2D(container, {
+          locations: result.locations,
+          onPinClick: openPanel,
+          onPinHover: onPinHover
+        });
+
+        function renderListView(locations) {
+          var contentEl = document.getElementById('list-view-content');
+          contentEl.innerHTML = '';
+          locations.forEach(function (loc) {
+            var employees = loc.employees || [];
+            var depts = loc.departments || {};
+            var deptNames = Object.keys(depts).sort(function (a, b) { return (depts[b].total || 0) - (depts[a].total || 0); });
+            var byCompany = {};
+            for (var i = 0; i < employees.length; i++) {
+              var co = (employees[i].company || 'Unknown').trim() || 'Unknown';
+              byCompany[co] = (byCompany[co] || 0) + 1;
+            }
+            var companyNames = Object.keys(byCompany).sort(function (a, b) { return byCompany[b] - byCompany[a]; });
+
+            var card = document.createElement('div');
+            card.className = 'location-card';
+            var header = document.createElement('div');
+            header.className = 'location-header';
+            header.innerHTML = '<span>' + escapeHtml(loc.label || 'Unknown') + '</span><span class="loc-count">' + loc.count + ' engineers</span>';
+            var body = document.createElement('div');
+            body.className = 'location-body';
+            body.innerHTML = '<div class="location-stats"><div class="tier-title" style="margin-bottom:0.35rem;">By company</div>';
+            companyNames.slice(0, 15).forEach(function (co) {
+              body.innerHTML += '<div class="stat-row"><strong>' + escapeHtml(co) + '</strong>: ' + byCompany[co] + '</div>';
+            });
+            body.innerHTML += '<div class="tier-title" style="margin:0.5rem 0 0.35rem 0;">By engineering type</div>';
+            deptNames.forEach(function (dn) {
+              body.innerHTML += '<div class="stat-row"><strong>' + escapeHtml(dn) + '</strong>: ' + (depts[dn].total || 0) + '</div>';
+            });
+            body.innerHTML += '</div>';
+            header.addEventListener('click', function () { card.classList.toggle('expanded'); });
+            card.appendChild(header);
+            card.appendChild(body);
+            contentEl.appendChild(card);
+          });
+        }
+
+        renderListView(result.locations);
+
+        var mapViewEl = document.getElementById('map-view');
+        var btnGlobe = document.getElementById('btn-globe-view');
+        var btnList = document.getElementById('btn-list-view');
+        var viewSubtitle = document.getElementById('view-subtitle');
+
+        if (btnList) {
+          btnList.addEventListener('click', function () {
+            mapViewEl.classList.add('list-mode');
+            if (btnGlobe) btnGlobe.classList.remove('active');
+            btnList.classList.add('active');
+            if (viewSubtitle) viewSubtitle.textContent = 'Locations by density — click to expand stats';
+          });
+        }
+        if (btnGlobe) {
+          btnGlobe.addEventListener('click', function () {
+            mapViewEl.classList.remove('list-mode');
+            btnGlobe.classList.add('active');
+            if (btnList) btnList.classList.remove('active');
+            if (viewSubtitle) viewSubtitle.textContent = 'Hover pins for snapshot · Click for detailed breakdown';
+          });
+        }
+      });
+
+      panelClose.addEventListener('click', function () {
+        panel.classList.remove('open');
+      });
+      } catch (e) {
+        showErr('Error: ' + (e && e.message ? e.message : String(e)));
+      }
+    })();
+  </script>
+</body>
+</html>
