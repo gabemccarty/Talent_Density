@@ -688,7 +688,7 @@
           var shareId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
           try {
             sessionStorage.setItem('talent-map-' + shareId, JSON.stringify(result));
-            var newUrl = location.pathname + (location.search || '') + '#s=' + shareId;
+            var newUrl = location.pathname + '?s=' + shareId;
             history.replaceState(null, '', newUrl);
           } catch (e) {
             if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
@@ -696,7 +696,7 @@
               if (tiny) {
                 var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(tiny));
                 if (compressed) {
-                  newUrl = location.pathname + (location.search || '') + '#' + compressed;
+                  newUrl = location.pathname + '?' + compressed;
                   history.replaceState(null, '', newUrl);
                 }
               }
@@ -772,16 +772,25 @@
         }
         return { companyName: tiny.n || 'Shared', totalEmployees: tiny.t || 0, locations: locs, tierLevelNames: tiny.tierLevelNames || {}, departmentColors: tiny.departmentColors || {} };
       }
+      function getShareIdFromUrl() {
+        var q = location.search.slice(1).split('&');
+        for (var i = 0; i < q.length; i++) {
+          var kv = q[i].split('=');
+          if (kv[0] === 's' && kv[1]) return kv[1];
+        }
+        if (location.hash.length > 3 && location.hash.indexOf('s=') === 1) return location.hash.slice(3).split('&')[0];
+        return null;
+      }
       function copyShareLink() {
         var url = location.href;
         if (currentResult && mapView && mapView.classList.contains('visible')) {
-          if (location.hash.indexOf('s=') === 1) {
+          if (getShareIdFromUrl()) {
             url = location.href;
           } else {
             try {
               var shareId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
               sessionStorage.setItem('talent-map-' + shareId, JSON.stringify(currentResult));
-              url = location.origin + location.pathname + (location.search || '') + '#s=' + shareId;
+              url = location.origin + location.pathname + '?s=' + shareId;
               history.replaceState(null, '', url);
             } catch (e) {
               if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
@@ -789,7 +798,7 @@
                 if (tiny) {
                   var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(tiny));
                   if (compressed) {
-                    url = location.origin + location.pathname + (location.search || '') + '#' + compressed;
+                    url = location.origin + location.pathname + '?' + compressed;
                     history.replaceState(null, '', url);
                   }
                 }
@@ -822,11 +831,10 @@
       }
       if (shareBtn) shareBtn.addEventListener('click', function (e) { e.preventDefault(); copyShareLink(); });
 
-      if (location.hash && location.hash.length > 1) {
+      (function tryLoadShared() {
         var loaded = null;
-        var hash = location.hash.slice(1);
-        if (hash.indexOf('s=') === 0) {
-          var shareId = hash.slice(2).split('&')[0];
+        var shareId = getShareIdFromUrl();
+        if (shareId) {
           try {
             var stored = sessionStorage.getItem('talent-map-' + shareId);
             if (stored) {
@@ -835,13 +843,20 @@
           } catch (e) {}
           if (loaded && loaded.locations && loaded.locations.length) {
             showResult(loaded);
-          } else if (landingError) {
+            return;
+          }
+          if (landingError) {
             landingError.textContent = 'This link only works when opened in the same browser (e.g. new tab on the same computer) where it was created. To share with someone on another device, they would need to open the app and upload the CSV.';
           }
-        } else if (typeof LZString !== 'undefined') {
-          var hashPayload = hash.replace(/ /g, '+');
+          return;
+        }
+        var search = location.search.slice(1);
+        if (search && typeof LZString !== 'undefined') {
+          var firstEq = search.indexOf('=');
+          var payload = firstEq === -1 ? search : search.slice(firstEq + 1);
+          payload = payload.replace(/ /g, '+');
           try {
-            var decoded = LZString.decompressFromEncodedURIComponent(hashPayload);
+            var decoded = LZString.decompressFromEncodedURIComponent(payload);
             if (decoded) {
               var parsed = JSON.parse(decoded);
               if (parsed && parsed.l && Array.isArray(parsed.l) && parsed.l.length > 0) {
@@ -853,11 +868,31 @@
           } catch (e) {}
           if (loaded && loaded.locations && loaded.locations.length) {
             showResult(loaded);
-          } else if (location.hash.length > 20 && landingError) {
-            landingError.textContent = 'Shared link could not be loaded (link may be truncated). Try copying the link again from the address bar.';
+            return;
           }
         }
-      }
+        if (location.hash && location.hash.length > 1 && typeof LZString !== 'undefined') {
+          var hashPayload = location.hash.slice(1).replace(/ /g, '+');
+          if (hashPayload.indexOf('s=') === 0) {
+            shareId = hashPayload.slice(2).split('&')[0];
+            try {
+              var stored = sessionStorage.getItem('talent-map-' + shareId);
+              if (stored) loaded = JSON.parse(stored);
+            } catch (e) {}
+          } else {
+            try {
+              var decoded = LZString.decompressFromEncodedURIComponent(hashPayload);
+              if (decoded) {
+                var parsed = JSON.parse(decoded);
+                if (parsed && parsed.l && Array.isArray(parsed.l) && parsed.l.length > 0) loaded = expandTinyPayload(parsed);
+                else if (parsed && parsed.locations && parsed.locations.length) loaded = parsed;
+              }
+            } catch (e) {}
+          }
+          if (loaded && loaded.locations && loaded.locations.length) showResult(loaded);
+          else if (location.hash.length > 20 && landingError) landingError.textContent = 'Shared link could not be loaded (link may be truncated). Try copying the link again from the address bar.';
+        }
+      })();
       } catch (e) {
         if (errEl) errEl.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
       }
