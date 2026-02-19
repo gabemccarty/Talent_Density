@@ -761,6 +761,15 @@
         }
         return { n: r.companyName, t: r.totalEmployees, l: locs, tierLevelNames: r.tierLevelNames, departmentColors: r.departmentColors };
       }
+      function makeSlackPayload(result) {
+        if (!result || !result.locations) return null;
+        var locs = [];
+        for (var i = 0; i < result.locations.length; i++) {
+          var loc = result.locations[i];
+          locs.push({ l: loc.label, a: loc.lat, g: loc.lng, c: loc.count });
+        }
+        return { n: result.companyName, t: result.totalEmployees, l: locs, tierLevelNames: result.tierLevelNames, departmentColors: result.departmentColors };
+      }
       function expandTinyPayload(tiny) {
         if (!tiny || !tiny.l || !tiny.l.length) return null;
         var locs = [];
@@ -783,31 +792,18 @@
       }
       function copyShareLink() {
         var url = location.href;
-        if (currentResult && mapView && mapView.classList.contains('visible')) {
-          var shareId = getShareIdFromUrl();
-          if (shareId) {
-            url = location.origin + location.pathname + '?s=' + shareId;
-            history.replaceState(null, '', location.pathname + '?s=' + shareId);
-            if (location.hash) location.hash = '';
-          } else {
-            try {
-              shareId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-              sessionStorage.setItem('talent-map-' + shareId, JSON.stringify(currentResult));
-              url = location.origin + location.pathname + '?s=' + shareId;
-              history.replaceState(null, '', url);
-            } catch (e) {
-              if (typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
-                var tiny = makeTinySharePayload(currentResult);
-                if (tiny) {
-                  var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(tiny));
-                  if (compressed) {
-                    url = location.origin + location.pathname + '?' + compressed;
-                    history.replaceState(null, '', url);
-                  }
-                }
+        if (currentResult && mapView && mapView.classList.contains('visible') && typeof LZString !== 'undefined' && LZString.compressToEncodedURIComponent) {
+          try {
+            var slack = makeSlackPayload(currentResult);
+            if (slack) {
+              var compressed = LZString.compressToEncodedURIComponent(JSON.stringify(slack));
+              if (compressed) {
+                url = location.origin + location.pathname + '?d=' + encodeURIComponent(compressed);
+                history.replaceState(null, '', location.pathname + '?d=' + encodeURIComponent(compressed));
+                if (location.hash) location.hash = '';
               }
             }
-          }
+          } catch (e) {}
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(url).then(function () { showShareFeedback('Link copied!'); }).catch(function () {
@@ -834,6 +830,17 @@
       }
       if (shareBtn) shareBtn.addEventListener('click', function (e) { e.preventDefault(); copyShareLink(); });
 
+      function getDParam() {
+        var s = location.search;
+        var i = s.indexOf('d=');
+        if (i === -1) return null;
+        var start = i + 2;
+        var rest = s.slice(start);
+        var amp = rest.indexOf('&');
+        var val = amp === -1 ? rest : rest.slice(0, amp);
+        try { val = decodeURIComponent(val); } catch (e) { return null; }
+        return val;
+      }
       (function tryLoadShared() {
         if (location.hash && location.hash.length > 3 && location.hash.indexOf('s=') === 1) {
           var oldId = location.hash.slice(3).split('&')[0];
@@ -843,6 +850,19 @@
           }
         }
         var loaded = null;
+        var dVal = getDParam();
+        if (dVal && typeof LZString !== 'undefined') {
+          try {
+            var decoded = LZString.decompressFromEncodedURIComponent(dVal);
+            if (decoded) {
+              var parsed = JSON.parse(decoded);
+              if (parsed && parsed.l && Array.isArray(parsed.l) && parsed.l.length > 0) {
+                loaded = expandTinyPayload(parsed);
+                if (loaded) { showResult(loaded); return; }
+              }
+            }
+          } catch (e) {}
+        }
         var shareId = getShareIdFromUrl();
         if (shareId) {
           try {
