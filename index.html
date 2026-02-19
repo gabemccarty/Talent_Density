@@ -784,11 +784,14 @@
       function copyShareLink() {
         var url = location.href;
         if (currentResult && mapView && mapView.classList.contains('visible')) {
-          if (getShareIdFromUrl()) {
-            url = location.href;
+          var shareId = getShareIdFromUrl();
+          if (shareId) {
+            url = location.origin + location.pathname + '?s=' + shareId;
+            history.replaceState(null, '', location.pathname + '?s=' + shareId);
+            if (location.hash) location.hash = '';
           } else {
             try {
-              var shareId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+              shareId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
               sessionStorage.setItem('talent-map-' + shareId, JSON.stringify(currentResult));
               url = location.origin + location.pathname + '?s=' + shareId;
               history.replaceState(null, '', url);
