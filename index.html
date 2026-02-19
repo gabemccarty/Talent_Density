@@ -832,6 +832,13 @@
       if (shareBtn) shareBtn.addEventListener('click', function (e) { e.preventDefault(); copyShareLink(); });
 
       (function tryLoadShared() {
+        if (location.hash && location.hash.length > 3 && location.hash.indexOf('s=') === 1) {
+          var oldId = location.hash.slice(3).split('&')[0];
+          if (oldId) {
+            history.replaceState(null, '', location.pathname + (location.search ? location.search + '&' : '?') + 's=' + oldId);
+            location.hash = '';
+          }
+        }
         var loaded = null;
         var shareId = getShareIdFromUrl();
         if (shareId) {
