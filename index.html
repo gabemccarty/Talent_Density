@@ -116,6 +116,13 @@
     #list-view-search-input:focus {
       outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(88,166,255,0.35);
     }
+    .list-view-search-btn {
+      padding: 0.75rem 1.25rem; font-size: 1rem; font-weight: 600;
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .list-view-search-btn:hover { filter: brightness(1.1); }
+    .list-view-search-btn:active { filter: brightness(0.95); }
     .list-view-search-hint { font-size: 0.85rem; color: var(--text-primary); white-space: nowrap; font-weight: 600; }
     .view-toggle {
       padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-light); color: var(--text-primary);
@@ -246,7 +253,8 @@
       <div class="list-view-search">
         <span class="list-view-search-label">Search</span>
         <input type="text" id="list-view-search-input" placeholder="e.g. infrastructure engineers, perception, SF Bay Area" aria-label="Search by role, department, or location">
-        <span class="list-view-search-hint">Filter &amp; sort by match</span>
+        <button type="button" class="list-view-search-btn" id="list-view-search-btn">Filter</button>
+        <span class="list-view-search-hint">Filters list by role, department, or location</span>
       </div>
       <div id="list-view-content"></div>
     </div>
@@ -617,11 +625,16 @@
         }
 
         var listSearchInput = document.getElementById('list-view-search-input');
+        var listSearchBtn = document.getElementById('list-view-search-btn');
         if (listSearchInput) {
           listSearchInput.value = '';
           listSearchInput.addEventListener('input', applyListSearch);
-          listSearchInput.addEventListener('keydown', function (e) { if (e.key === 'Escape') { listSearchInput.value = ''; applyListSearch(); listSearchInput.blur(); } });
+          listSearchInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { listSearchInput.value = ''; applyListSearch(); listSearchInput.blur(); }
+            if (e.key === 'Enter') { e.preventDefault(); applyListSearch(); }
+          });
         }
+        if (listSearchBtn) listSearchBtn.addEventListener('click', function () { applyListSearch(); });
 
         renderListView(result.locations);
 
